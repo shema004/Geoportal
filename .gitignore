@@ -6,5 +6,4 @@ venv/
 uploads/*.tif
 uploads/*.tiff
 uploads/*.img
-*.gdb
 .DS_Store
