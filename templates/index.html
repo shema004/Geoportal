@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>GeoPortal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+:root {
+  --bg: #0a0c10;
+  --panel: #111318;
+  --border: #1e2230;
+  --accent: #00e5a0;
+  --accent2: #ff6b35;
+  --accent3: #a78bfa;
+  --text: #e2e8f0;
+  --muted: #64748b;
+  --hover: #1a1e2a;
+  --table-head: #161a24;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Syne',sans-serif; background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+
+/* Header */
+header { display:flex; align-items:center; gap:16px; padding:0 24px; height:56px; background:var(--panel); border-bottom:1px solid var(--border); flex-shrink:0; z-index:1000; }
+.logo { font-size:18px; font-weight:800; letter-spacing:-.5px; color:var(--accent); white-space:nowrap; }
+.logo span { color:var(--text); }
+.gdb-bar { display:flex; align-items:center; gap:8px; flex:1; max-width:620px; margin-left:auto; }
+.gdb-bar input { flex:1; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:7px 12px; font-family:'Space Mono',monospace; font-size:12px; border-radius:4px; outline:none; transition:border-color .2s; }
+.gdb-bar input:focus { border-color:var(--accent); }
+.btn { background:var(--accent); color:#0a0c10; border:none; padding:7px 16px; font-family:'Syne',sans-serif; font-size:13px; font-weight:700; border-radius:4px; cursor:pointer; white-space:nowrap; transition:opacity .15s; }
+.btn:hover { opacity:.85; }
+.btn.secondary { background:transparent; border:1px solid var(--border); color:var(--text); }
+.btn.secondary:hover { border-color:var(--accent); color:var(--accent); }
+.btn.raster-btn { background:var(--accent3); color:#0a0c10; font-size:12px; padding:6px 12px; }
+.btn.raster-btn:hover { opacity:.85; }
+
+/* Layout */
+.workspace { display:flex; flex:1; overflow:hidden; }
+
+/* Sidebar */
+.sidebar { width:290px; flex-shrink:0; background:var(--panel); border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
+.sidebar-section { padding:12px 16px 8px; border-bottom:1px solid var(--border); font-size:11px; font-weight:600; letter-spacing:2px; text-transform:uppercase; color:var(--muted); display:flex; align-items:center; justify-content:space-between; }
+.sidebar-section .section-action { font-size:10px; letter-spacing:1px; color:var(--accent3); cursor:pointer; font-weight:700; }
+.sidebar-section .section-action:hover { opacity:.8; }
+
+/* Basemap switcher */
+.basemap-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; padding:10px; border-bottom:1px solid var(--border); }
+.bm-btn { background:var(--hover); border:2px solid var(--border); color:var(--text); padding:8px 6px; border-radius:6px; cursor:pointer; text-align:center; font-family:'Syne',sans-serif; font-size:11px; font-weight:600; transition:all .15s; line-height:1.4; }
+.bm-btn:hover { border-color:var(--muted); }
+.bm-btn.active { border-color:var(--accent); color:var(--accent); background:rgba(0,229,160,.07); }
+.bm-btn .bm-icon { font-size:18px; display:block; margin-bottom:3px; }
+
+/* Layer list */
+.layer-list { flex:1; overflow-y:auto; padding:8px; }
+.layer-item { display:flex; align-items:center; gap:8px; padding:9px 10px; border-radius:6px; cursor:pointer; transition:background .15s; border:1px solid transparent; margin-bottom:3px; }
+.layer-item:hover { background:var(--hover); }
+.layer-item.active { border-color:var(--accent); background:rgba(0,229,160,.05); }
+.layer-item.raster { border-left:3px solid var(--accent3); }
+.layer-item.raster.active { border-color:var(--accent3); background:rgba(167,139,250,.05); }
+.layer-toggle { width:18px; height:18px; border-radius:4px; border:2px solid var(--border); flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:all .15s; }
+.layer-toggle.on { background:var(--accent); border-color:var(--accent); }
+.layer-toggle.on.raster-toggle { background:var(--accent3); border-color:var(--accent3); }
+.layer-toggle.on::after { content:'✓'; font-size:11px; color:#0a0c10; font-weight:700; }
+.layer-color { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+.layer-type-badge { font-size:8px; background:rgba(167,139,250,.2); color:var(--accent3); border-radius:3px; padding:1px 4px; font-weight:700; letter-spacing:.5px; flex-shrink:0; }
+.layer-name { font-size:12px; font-weight:600; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.layer-actions { display:flex; gap:3px; opacity:0; transition:opacity .15s; }
+.layer-item:hover .layer-actions { opacity:1; }
+.icon-btn { background:none; border:1px solid var(--border); color:var(--muted); width:26px; height:26px; border-radius:4px; cursor:pointer; font-size:12px; display:flex; align-items:center; justify-content:center; transition:all .15s; }
+.icon-btn:hover { border-color:var(--accent); color:var(--accent); }
+.empty-state { padding:24px 16px; text-align:center; color:var(--muted); font-size:12px; line-height:1.7; }
+
+/* Raster section in sidebar */
+.raster-section { border-top:1px solid var(--border); flex-shrink:0; }
+.raster-upload-area { padding:8px 10px; display:flex; align-items:center; gap:8px; }
+.raster-upload-area input[type=file] { display:none; }
+.raster-upload-label { flex:1; font-size:11px; color:var(--muted); cursor:pointer; padding:7px 10px; border:1px dashed var(--border); border-radius:4px; text-align:center; transition:all .15s; }
+.raster-upload-label:hover { border-color:var(--accent3); color:var(--accent3); }
+.raster-list { padding:0 8px 8px; max-height:140px; overflow-y:auto; }
+
+/* Opacity slider for rasters */
+.raster-opacity { padding:4px 10px 8px; }
+.raster-opacity label { font-size:10px; color:var(--muted); display:flex; justify-content:space-between; margin-bottom:4px; }
+.raster-opacity input[type=range] { width:100%; accent-color:var(--accent3); }
+
+/* Legend inside sidebar */
+.layer-legend { padding:0 10px 8px; }
+.legend-title { font-size:10px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; padding:4px 2px; }
+.legend-item { display:flex; align-items:center; gap:7px; padding:2px 2px; font-size:11px; font-family:'Space Mono',monospace; color:var(--text); }
+.legend-swatch { width:14px; height:14px; border-radius:3px; flex-shrink:0; border:1px solid rgba(255,255,255,.1); }
+
+/* Main */
+.main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+#map { flex:1; min-height:0; background:#0d1117; }
+
+/* Bottom panel */
+.bottom-panel { height:260px; flex-shrink:0; background:var(--panel); border-top:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; transition:height .3s; }
+.bottom-panel.collapsed { height:42px; }
+.panel-header { display:flex; align-items:center; gap:12px; padding:0 16px; height:42px; flex-shrink:0; border-bottom:1px solid var(--border); cursor:pointer; user-select:none; }
+.panel-title { font-size:11px; font-weight:600; letter-spacing:2px; text-transform:uppercase; color:var(--muted); flex:1; }
+.panel-layer-name { font-size:12px; color:var(--accent); font-family:'Space Mono',monospace; }
+.panel-toggle { color:var(--muted); font-size:14px; transition:transform .3s; }
+.bottom-panel.collapsed .panel-toggle { transform:rotate(180deg); }
+.table-wrap { flex:1; overflow:auto; min-height:0; }
+table { width:100%; border-collapse:collapse; font-family:'Space Mono',monospace; font-size:11px; }
+thead { position:sticky; top:0; background:var(--table-head); z-index:1; }
+th { padding:8px 12px; text-align:left; color:var(--accent); font-weight:700; letter-spacing:.5px; border-right:1px solid var(--border); white-space:nowrap; }
+td { padding:6px 12px; border-right:1px solid var(--border); border-bottom:1px solid rgba(30,34,48,.5); color:var(--text); white-space:nowrap; max-width:200px; overflow:hidden; text-overflow:ellipsis; }
+tr:hover td { background:var(--hover); }
+
+/* Raster info panel */
+.raster-info { padding:16px; font-size:12px; font-family:'Space Mono',monospace; color:var(--muted); }
+.raster-info .ri-row { display:flex; gap:12px; padding:4px 0; border-bottom:1px solid var(--border); }
+.raster-info .ri-key { color:var(--accent3); width:80px; flex-shrink:0; }
+.raster-info .ri-val { color:var(--text); }
+
+/* Symbology modal */
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.75); z-index:2000; display:none; align-items:center; justify-content:center; }
+.modal-overlay.open { display:flex; }
+.modal { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:24px; width:420px; max-height:80vh; overflow-y:auto; }
+.modal h3 { font-size:15px; font-weight:800; margin-bottom:4px; }
+.modal p { font-size:12px; color:var(--muted); margin-bottom:16px; }
+.modal label { font-size:12px; color:var(--muted); display:block; margin-bottom:5px; }
+.modal select { width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:8px 10px; font-family:'Space Mono',monospace; font-size:12px; border-radius:4px; outline:none; margin-bottom:14px; }
+.modal select:focus { border-color:var(--accent); }
+.palette-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-bottom:16px; }
+.pal-btn { border:2px solid var(--border); border-radius:6px; padding:6px 4px; cursor:pointer; text-align:center; font-size:10px; font-weight:700; background:var(--hover); color:var(--text); transition:all .15s; }
+.pal-btn.active { border-color:var(--accent); }
+.pal-preview { display:flex; gap:2px; justify-content:center; margin-bottom:4px; }
+.pal-swatch { width:12px; height:12px; border-radius:2px; }
+.modal-footer { display:flex; gap:8px; justify-content:flex-end; margin-top:4px; }
+
+/* Download modal */
+.format-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:20px; }
+.format-btn { background:var(--hover); border:2px solid var(--border); color:var(--text); padding:14px 8px; border-radius:6px; cursor:pointer; text-align:center; transition:all .15s; font-family:'Syne',sans-serif; }
+.format-btn:hover,.format-btn.selected { border-color:var(--accent); color:var(--accent); background:rgba(0,229,160,.05); }
+.format-btn .fmt-icon { font-size:22px; display:block; margin-bottom:6px; }
+.format-btn .fmt-label { font-size:12px; font-weight:700; }
+
+/* Toast */
+.toast { position:fixed; bottom:24px; right:24px; background:var(--accent); color:#0a0c10; padding:10px 18px; border-radius:6px; font-size:13px; font-weight:700; z-index:3000; transform:translateY(60px); opacity:0; transition:all .3s; pointer-events:none; }
+.toast.show { transform:translateY(0); opacity:1; }
+.toast.error { background:var(--accent2); }
+.spinner { display:inline-block; width:14px; height:14px; border:2px solid rgba(0,229,160,.2); border-top-color:var(--accent); border-radius:50%; animation:spin .6s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+::-webkit-scrollbar { width:6px; height:6px; }
+::-webkit-scrollbar-track { background:var(--bg); }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+::-webkit-scrollbar-thumb:hover { background:var(--muted); }
+
+/* Raster colorbar legend */
+.raster-colorbar { display:flex; flex-direction:column; gap:3px; padding:8px 10px; }
+.raster-colorbar-title { font-size:10px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; }
+.raster-colorbar-bar { height:10px; border-radius:3px; background:linear-gradient(to right, #440154, #3b5289, #21918c, #5ec462, #fde725); border:1px solid rgba(255,255,255,.1); }
+.raster-colorbar-labels { display:flex; justify-content:space-between; font-size:9px; font-family:'Space Mono',monospace; color:var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">GEO<span>PORTAL</span></div>
+  <div class="gdb-bar">
+    <input type="text" id="gdbInput" placeholder="Paste GDB path (e.g. C:\path\to\data.gdb)" />
+    <button class="btn" onclick="loadGDB()">Load GDB</button>
+  </div>
+</header>
+
+<div class="workspace">
+  <div class="sidebar">
+    <!-- Basemap switcher -->
+    <div class="sidebar-section">Basemap</div>
+    <div class="basemap-grid">
+      <div class="bm-btn active" onclick="setBasemap('dark',this)"><span class="bm-icon">🌑</span>Dark</div>
+      <div class="bm-btn" onclick="setBasemap('street',this)"><span class="bm-icon">🗺️</span>Street</div>
+      <div class="bm-btn" onclick="setBasemap('ortho',this)"><span class="bm-icon">🛰️</span>Satellite</div>
+      <div class="bm-btn" onclick="setBasemap('topo',this)"><span class="bm-icon">⛰️</span>Topo</div>
+    </div>
+
+    <!-- Vector Layers -->
+    <div class="sidebar-section">
+      <span>Vector Layers</span>
+    </div>
+    <div class="layer-list" id="layerList">
+      <div class="empty-state">Enter a GDB path above and click <strong>Load GDB</strong>.</div>
+    </div>
+
+    <!-- Raster Layers -->
+    <div class="raster-section">
+      <div class="sidebar-section">
+        <span>Raster Layers</span>
+        <span class="section-action" onclick="document.getElementById('rasterFileInput').click()">+ Upload</span>
+      </div>
+      <!-- Manual folder scan -->
+      <div style="padding:6px 10px 0; display:flex; gap:6px; align-items:center;">
+        <input type="text" id="rasterFolderInput" placeholder="Paste folder path with rasters…"
+          style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);
+                 padding:6px 8px;font-family:'Space Mono',monospace;font-size:11px;border-radius:4px;outline:none;"
+          onfocus="this.style.borderColor='var(--accent3)'" onblur="this.style.borderColor='var(--border)'"
+          onkeydown="if(event.key==='Enter') scanRasterFolder()"/>
+        <button class="btn" onclick="scanRasterFolder()"
+          style="background:var(--accent3);color:#0a0c10;padding:6px 10px;font-size:11px;">Scan</button>
+      </div>
+      <!-- Upload button -->
+      <div style="padding:4px 10px 6px; display:flex; gap:6px; align-items:center;">
+        <label for="rasterFileInput"
+          style="flex:1;font-size:11px;color:var(--muted);cursor:pointer;padding:6px 10px;
+                 border:1px dashed var(--border);border-radius:4px;text-align:center;
+                 transition:all .15s;"
+          onmouseover="this.style.borderColor='var(--accent3)';this.style.color='var(--accent3)'"
+          onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
+          ↑ Upload .tif / .img
+        </label>
+      </div>
+      <input type="file" id="rasterFileInput" accept=".tif,.tiff,.img,.vrt,.nc" onchange="uploadRaster(this)" style="display:none"/>
+      <div class="raster-list" id="rasterList">
+        <div id="rasterEmptyState" style="padding:8px 14px;font-size:11px;color:var(--muted);line-height:1.6;">
+          No rasters found automatically.<br>
+          <span style="color:var(--accent3);">Paste the folder path above</span> (e.g. the folder containing your .tif files) and click <strong>Scan</strong>, or upload directly.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div id="map"></div>
+    <div class="bottom-panel collapsed" id="bottomPanel">
+      <div class="panel-header" onclick="togglePanel()">
+        <span class="panel-title">Attribute Table</span>
+        <span class="panel-layer-name" id="panelLayerName">— no layer selected —</span>
+        <span class="panel-toggle">▲</span>
+      </div>
+      <div class="table-wrap" id="tableWrap">
+        <div class="empty-state">Select a layer to view its attributes.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Symbology Modal -->
+<div class="modal-overlay" id="symModal">
+  <div class="modal">
+    <h3>🎨 Symbology</h3>
+    <p id="symLayerLabel">Classify layer by attribute</p>
+    <label>Classify by field</label>
+    <select id="symField"></select>
+    <label>Color palette</label>
+    <div class="palette-grid" id="paletteGrid"></div>
+    <div class="modal-footer">
+      <button class="btn secondary" onclick="closeSymModal()">Cancel</button>
+      <button class="btn" onclick="applySymbology()">Apply</button>
+    </div>
+  </div>
+</div>
+
+<!-- Download Modal -->
+<div class="modal-overlay" id="dlModal">
+  <div class="modal">
+    <h3>Download Layer</h3>
+    <p id="dlLayerName">Select a format to download</p>
+    <div class="format-grid">
+      <div class="format-btn selected" onclick="selectFmt(this,'geojson')"><span class="fmt-icon">🗺️</span><span class="fmt-label">GeoJSON</span></div>
+      <div class="format-btn" onclick="selectFmt(this,'shapefile')"><span class="fmt-icon">📦</span><span class="fmt-label">Shapefile</span></div>
+      <div class="format-btn" onclick="selectFmt(this,'csv')"><span class="fmt-icon">📄</span><span class="fmt-label">CSV</span></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn secondary" onclick="closeDlModal()">Cancel</button>
+      <button class="btn" onclick="doDownload()">Download</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ── Basemaps ───────────────────────────────────────────────────────────────
+const BASEMAPS = {
+  dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    { attribution:'© OpenStreetMap © CARTO', subdomains:'abcd', maxZoom:20 }),
+  street: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    { attribution:'© OpenStreetMap contributors', maxZoom:19 }),
+  ortho: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    { attribution:'© Esri, Maxar, Earthstar Geographics', maxZoom:19 }),
+  topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    { attribution:'© OpenStreetMap © OpenTopoMap', maxZoom:17 })
+};
+
+const map = L.map('map', { zoomControl:true }).setView([-1.5, 30.1], 12);
+let currentBasemap = BASEMAPS.dark;
+currentBasemap.addTo(map);
+
+function setBasemap(key, el) {
+  map.removeLayer(currentBasemap);
+  currentBasemap = BASEMAPS[key];
+  currentBasemap.addTo(map);
+  currentBasemap.bringToBack();
+  document.querySelectorAll('.bm-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  layers.forEach(l => { if (l.visible && l.leafletLayer) l.leafletLayer.bringToFront(); });
+  rasters.forEach(r => { if (r.visible && r.leafletLayer) r.leafletLayer.bringToFront(); });
+}
+
+// ── Color palettes ─────────────────────────────────────────────────────────
+const PALETTES = {
+  vivid:    ['#00e5a0','#ff6b35','#3b82f6','#f59e0b','#a855f7','#ec4899','#06b6d4','#84cc16','#f43f5e','#8b5cf6','#14b8a6','#f97316'],
+  pastel:   ['#a8dadc','#457b9d','#e63946','#2a9d8f','#e9c46a','#f4a261','#264653','#e76f51','#90be6d','#43aa8b','#4d908e','#577590'],
+  earth:    ['#8b4513','#d2691e','#cd853f','#deb887','#f4a460','#c19a6b','#a0522d','#6b3a2a','#4e2a1e','#8b6914','#b8860b','#daa520'],
+  spectral: ['#d53e4f','#f46d43','#fdae61','#fee08b','#e6f598','#abdda4','#66c2a5','#3288bd','#5e4fa2','#9e0142','#762a83','#1b7837'],
+  mono:     ['#e2e8f0','#cbd5e1','#94a3b8','#64748b','#475569','#334155','#1e293b','#0f172a','#f8fafc','#f1f5f9','#e2e8f0','#b0bec5'],
+  neon:     ['#ff00ff','#00ffff','#ffff00','#ff6600','#00ff66','#6600ff','#ff0066','#0066ff','#66ff00','#ff6666','#66ffff','#ffff66'],
+  rwanda:   ['#009A44','#FAD201','#20603D','#E5243B','#0077C8','#F16521','#8B0000','#005A9C','#00843D','#FFCD00','#C8102E','#003087']
+};
+
+// ── State ──────────────────────────────────────────────────────────────────
+const DEFAULT_COLORS = PALETTES.vivid;
+let layers = [];
+let rasters = [];   // {name, path, visible, leafletLayer, opacity}
+let activeLayerName = null;
+let dlLayerTarget = null;
+let dlFormat = 'geojson';
+let symLayerIdx = null;
+let selectedPalette = 'vivid';
+
+// ── Load GDB ───────────────────────────────────────────────────────────────
+async function loadGDB() {
+  const path = document.getElementById('gdbInput').value.trim();
+  if (!path) return showToast('Enter a GDB path', true);
+  showToast('Loading GDB…');
+  try {
+    const res = await fetch('/api/set-gdb', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path}) });
+    const data = await res.json();
+    if (data.error) return showToast(data.error, true);
+    layers.forEach(l => { if (l.leafletLayer) map.removeLayer(l.leafletLayer); });
+    layers = data.layers.map((name, i) => ({
+      name, color: DEFAULT_COLORS[i % DEFAULT_COLORS.length],
+      visible: false, leafletLayer: null,
+      symField: null, symMap: null, geojsonCache: null
+    }));
+    renderSidebar();
+
+    // Register rasters found near the GDB
+    if (data.rasters && data.rasters.length) {
+      data.rasters.forEach(r => addRasterEntry(r.name, r.path));
+    }
+    renderRasterList();
+    showToast(`Loaded ${layers.length} layer${layers.length!==1?'s':''} · ${(data.rasters||[]).length} raster(s) found`);
+  } catch(e) { showToast('Failed to load GDB', true); }
+}
+
+// ── Sidebar ────────────────────────────────────────────────────────────────
+function renderSidebar() {
+  const el = document.getElementById('layerList');
+  if (!layers.length) { el.innerHTML='<div class="empty-state">No layers found.</div>'; return; }
+  el.innerHTML = layers.map((l, i) => `
+    <div class="layer-item ${l.name===activeLayerName?'active':''}" id="li-${i}">
+      <div class="layer-toggle ${l.visible?'on':''}" onclick="toggleLayer(${i},event)"></div>
+      <div class="layer-color" style="background:${l.color}"></div>
+      <div class="layer-name" onclick="selectLayer(${i})">${l.name}</div>
+      <div class="layer-actions">
+        <button class="icon-btn" title="Symbology" onclick="openSymModal(${i},event)">🎨</button>
+        <button class="icon-btn" title="Attributes" onclick="openAttributes(${i},event)">≡</button>
+        <button class="icon-btn" title="Download" onclick="openDownload(${i},event)">↓</button>
+      </div>
+    </div>
+    ${l.symMap ? renderLegend(l) : ''}
+  `).join('');
+}
+
+function renderLegend(l) {
+  if (!l.symMap) return '';
+  const items = Object.entries(l.symMap).map(([val, col]) =>
+    `<div class="legend-item"><div class="legend-swatch" style="background:${col}"></div>${val}</div>`
+  ).join('');
+  return `<div class="layer-legend"><div class="legend-title">${l.symField}</div>${items}</div>`;
+}
+
+// ── Toggle vector layer ────────────────────────────────────────────────────
+async function toggleLayer(i, e) {
+  e.stopPropagation();
+  const l = layers[i];
+  if (!l.visible) {
+    if (!l.geojsonCache) {
+      showToast(`Loading ${l.name}…`);
+      try {
+        const res = await fetch(`/api/layer/${encodeURIComponent(l.name)}/geojson`);
+        const gj = await res.json();
+        if (gj.error) return showToast(gj.error, true);
+        l.geojsonCache = gj;
+      } catch(e) { return showToast('Failed to load layer', true); }
+    }
+    l.leafletLayer = buildLeafletLayer(l);
+    l.leafletLayer.addTo(map);
+    try { map.fitBounds(l.leafletLayer.getBounds(), {padding:[30,30]}); } catch(e){}
+    l.visible = true;
+    showToast(`${l.name} visible`);
+  } else {
+    map.removeLayer(l.leafletLayer);
+    l.visible = false;
+  }
+  renderSidebar();
+}
+
+function buildLeafletLayer(l) {
+  return L.geoJSON(l.geojsonCache, {
+    style: (feature) => {
+      const color = getFeatureColor(l, feature);
+      return { color, weight:2, opacity:.9, fillColor:color, fillOpacity:.35 };
+    },
+    pointToLayer: (f, latlng) => {
+      const color = getFeatureColor(l, f);
+      return L.circleMarker(latlng, { radius:6, fillColor:color, color:'#0a0c10', weight:1, opacity:1, fillOpacity:.85 });
+    },
+    onEachFeature: (f, layer) => {
+      const props = f.properties || {};
+      const html = Object.entries(props).slice(0,10).map(([k,v])=>`<b>${k}</b>: ${v}`).join('<br>');
+      layer.bindPopup(`<div style="font-family:'Space Mono',monospace;font-size:11px;max-width:240px;line-height:1.6">${html}</div>`);
+    }
+  });
+}
+
+function getFeatureColor(l, feature) {
+  if (l.symMap && l.symField) {
+    const val = String(feature.properties[l.symField] ?? 'null');
+    return l.symMap[val] || l.color;
+  }
+  return l.color;
+}
+
+// ── Select layer ───────────────────────────────────────────────────────────
+function selectLayer(i) {
+  activeLayerName = layers[i].name;
+  renderSidebar();
+  openAttributes(i);
+}
+
+// ── Attributes ────────────────────────────────────────────────────────────
+async function openAttributes(i, e) {
+  if (e) e.stopPropagation();
+  const l = layers[i];
+  activeLayerName = l.name;
+  renderSidebar();
+  document.getElementById('panelLayerName').textContent = l.name;
+  document.getElementById('tableWrap').innerHTML = '<div class="empty-state"><span class="spinner"></span> Loading…</div>';
+  document.getElementById('bottomPanel').classList.remove('collapsed');
+  try {
+    const res = await fetch(`/api/layer/${encodeURIComponent(l.name)}/attributes`);
+    const data = await res.json();
+    if (data.error) { document.getElementById('tableWrap').innerHTML=`<div class="empty-state">Error: ${data.error}</div>`; return; }
+    renderTable(data);
+  } catch(e) { document.getElementById('tableWrap').innerHTML='<div class="empty-state">Failed to load attributes.</div>'; }
+}
+
+function renderTable({columns, rows, total}) {
+  const note = total > rows.length
+    ? `<span style="color:var(--muted);font-size:11px;font-family:'Space Mono',monospace;padding:6px 12px;display:block">Showing first ${rows.length} of ${total} records</span>` : '';
+  const thead = `<thead><tr>${columns.map(c=>`<th>${c}</th>`).join('')}</tr></thead>`;
+  const tbody = `<tbody>${rows.map(r=>`<tr>${r.map(v=>`<td title="${v}">${v}</td>`).join('')}</tr>`).join('')}</tbody>`;
+  document.getElementById('tableWrap').innerHTML = note + `<table>${thead}${tbody}</table>`;
+}
+
+function togglePanel() { document.getElementById('bottomPanel').classList.toggle('collapsed'); }
+
+// ── Symbology Modal ────────────────────────────────────────────────────────
+async function openSymModal(i, e) {
+  if (e) e.stopPropagation();
+  symLayerIdx = i;
+  const l = layers[i];
+  document.getElementById('symLayerLabel').textContent = `Layer: ${l.name}`;
+  let columns = [];
+  try {
+    const res = await fetch(`/api/layer/${encodeURIComponent(l.name)}/attributes`);
+    const data = await res.json();
+    columns = data.columns || [];
+  } catch(e) {}
+  const sel = document.getElementById('symField');
+  sel.innerHTML = columns.map(c=>`<option value="${c}" ${c===l.symField?'selected':''}>${c}</option>`).join('');
+  selectedPalette = 'vivid';
+  const pg = document.getElementById('paletteGrid');
+  pg.innerHTML = Object.entries(PALETTES).map(([key, cols]) => `
+    <div class="pal-btn ${key==='vivid'?'active':''}" onclick="selectPalette('${key}',this)">
+      <div class="pal-preview">${cols.slice(0,5).map(c=>`<div class="pal-swatch" style="background:${c}"></div>`).join('')}</div>
+      ${key}
+    </div>
+  `).join('');
+  document.getElementById('symModal').classList.add('open');
+}
+
+function selectPalette(key, el) {
+  selectedPalette = key;
+  document.querySelectorAll('.pal-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+}
+
+async function applySymbology() {
+  const i = symLayerIdx;
+  const l = layers[i];
+  const field = document.getElementById('symField').value;
+  if (!field) return;
+  let gj = l.geojsonCache;
+  if (!gj) {
+    showToast('Loading layer data…');
+    const res = await fetch(`/api/layer/${encodeURIComponent(l.name)}/geojson`);
+    gj = await res.json();
+    l.geojsonCache = gj;
+  }
+  const palette = PALETTES[selectedPalette];
+  const uniqueVals = [...new Set((gj.features||[]).map(f=>String(f.properties[field]??'null')))].sort();
+  const symMap = {};
+  uniqueVals.forEach((v,i) => { symMap[v] = palette[i % palette.length]; });
+  l.symField = field;
+  l.symMap = symMap;
+  l.color = palette[0];
+  if (l.visible && l.leafletLayer) {
+    map.removeLayer(l.leafletLayer);
+    l.leafletLayer = buildLeafletLayer(l);
+    l.leafletLayer.addTo(map);
+  }
+  closeSymModal();
+  renderSidebar();
+  showToast(`Symbology applied: ${field}`);
+}
+
+function closeSymModal() { document.getElementById('symModal').classList.remove('open'); }
+
+// ── Download ───────────────────────────────────────────────────────────────
+function openDownload(i, e) {
+  if (e) e.stopPropagation();
+  dlLayerTarget = layers[i].name;
+  document.getElementById('dlLayerName').textContent = `Layer: ${dlLayerTarget}`;
+  document.getElementById('dlModal').classList.add('open');
+}
+function closeDlModal() { document.getElementById('dlModal').classList.remove('open'); }
+function selectFmt(el, fmt) {
+  document.querySelectorAll('.format-btn').forEach(b=>b.classList.remove('selected'));
+  el.classList.add('selected');
+  dlFormat = fmt;
+}
+function doDownload() {
+  if (!dlLayerTarget) return;
+  const a = document.createElement('a');
+  a.href = `/api/layer/${encodeURIComponent(dlLayerTarget)}/download?format=${dlFormat}`;
+  a.click();
+  closeDlModal();
+  showToast(`Downloading as ${dlFormat.toUpperCase()}…`);
+}
+
+// ── RASTER SUPPORT ─────────────────────────────────────────────────────────
+
+function addRasterEntry(name, path) {
+  if (rasters.find(r => r.path === path)) return;
+  rasters.push({ name, path, visible: false, leafletLayer: null, opacity: 0.7 });
+}
+
+function renderRasterList() {
+  const el = document.getElementById('rasterList');
+  const empty = document.getElementById('rasterEmptyState');
+  if (!rasters.length) {
+    if (empty) empty.style.display = '';
+    el.innerHTML = '';
+    el.appendChild(empty || document.createElement('div'));
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  el.innerHTML = rasters.map((r, i) => `
+    <div class="layer-item raster ${r.visible ? 'active' : ''}" id="rl-${i}">
+      <div class="layer-toggle raster-toggle ${r.visible ? 'on' : ''}" onclick="toggleRaster(${i}, event)"></div>
+      <span class="layer-type-badge">TIF</span>
+      <div class="layer-name" title="${r.name}">${r.name}</div>
+      <div class="layer-actions">
+        <button class="icon-btn" title="Remove" onclick="removeRaster(${i}, event)" style="color:#f43f5e">✕</button>
+      </div>
+    </div>
+    ${r.visible ? `
+    <div class="raster-opacity" style="padding: 2px 10px 8px;">
+      <label><span>Opacity</span><span>${Math.round(r.opacity*100)}%</span></label>
+      <input type="range" min="0" max="100" value="${Math.round(r.opacity*100)}"
+        oninput="setRasterOpacity(${i}, this.value/100); this.previousElementSibling.lastElementChild.textContent=this.value+'%'"/>
+    </div>
+    ` : ''}
+    ${r.visible ? `
+    <div class="raster-colorbar" style="padding:2px 10px 8px;">
+      <div class="raster-colorbar-title">Colormap</div>
+      <div class="raster-colorbar-bar"></div>
+      <div class="raster-colorbar-labels"><span>Low</span><span>High</span></div>
+    </div>` : ''}
+  `).join('');
+}
+
+async function toggleRaster(i, e) {
+  if (e) e.stopPropagation();
+  const r = rasters[i];
+  if (r.visible) {
+    if (r.leafletLayer) map.removeLayer(r.leafletLayer);
+    r.visible = false;
+    renderRasterList();
+    return;
+  }
+  showToast(`Processing raster: ${r.name}…`);
+  try {
+    const res = await fetch('/api/raster/preview', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ path: r.path, band: 1 })
+    });
+    const data = await res.json();
+    if (data.error) return showToast(`Raster error: ${data.error}`, true);
+
+    const imgUrl = `data:image/png;base64,${data.base64}`;
+    const bounds = data.bounds; // [[south,west],[north,east]]
+
+    r.leafletLayer = L.imageOverlay(imgUrl, bounds, { opacity: r.opacity, interactive: true });
+    r.leafletLayer.addTo(map);
+    map.fitBounds(bounds, { padding: [20, 20] });
+    r.visible = true;
+    renderRasterList();
+    showToast(`${r.name} loaded (${data.width}×${data.height}px, ${data.bands} band${data.bands>1?'s':''})`);
+  } catch(err) {
+    showToast('Failed to load raster', true);
+  }
+}
+
+function setRasterOpacity(i, val) {
+  const r = rasters[i];
+  r.opacity = val;
+  if (r.leafletLayer) r.leafletLayer.setOpacity(val);
+}
+
+function removeRaster(i, e) {
+  if (e) e.stopPropagation();
+  const r = rasters[i];
+  if (r.leafletLayer) map.removeLayer(r.leafletLayer);
+  rasters.splice(i, 1);
+  renderRasterList();
+  showToast('Raster removed');
+}
+
+async function scanRasterFolder() {
+  const folder = document.getElementById('rasterFolderInput').value.trim();
+  if (!folder) return showToast('Paste a folder path first', true);
+  showToast('Scanning folder…');
+  try {
+    const res = await fetch('/api/scan-folder', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ folder })
+    });
+    const data = await res.json();
+    if (data.error) return showToast(data.error, true);
+    if (!data.count) return showToast('No rasters found in that folder', true);
+    data.rasters.forEach(r => addRasterEntry(r.name, r.path));
+    renderRasterList();
+    showToast(`Found ${data.count} raster${data.count!==1?'s':''} — click the toggle to display`);
+  } catch(e) { showToast('Scan failed', true); }
+}
+
+async function uploadRaster(input) {
+  const file = input.files[0];
+  if (!file) return;
+  showToast(`Uploading ${file.name}…`);
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const res = await fetch('/api/upload-raster', { method:'POST', body: fd });
+    const data = await res.json();
+    if (data.error) return showToast(data.error, true);
+    addRasterEntry(data.name, data.path);
+    renderRasterList();
+    showToast(`${data.name} uploaded — click the toggle to display it`);
+  } catch(err) {
+    showToast('Upload failed', true);
+  }
+  input.value = '';
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg, error=false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (error?' error':'');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), 3500);
+}
+
+// Close modals on overlay click
+['symModal','dlModal'].forEach(id => {
+  document.getElementById(id).addEventListener('click', e => {
+    if (e.target.id === id) document.getElementById(id).classList.remove('open');
+  });
+});
+</script>
+</body>
+</html>
