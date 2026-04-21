@@ -19,10 +19,8 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 _layer_cache: dict = {}
 _raster_cache: dict = {}
-__active_gdb: str = os.path.join(os.path.dirname(__file__), "data", "G7 Kigarama.gdb")
-_raster_files: list = []   # list of absolute paths to uploaded rasters
-
-
+_raster_files: list = []
+_active_gdb: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "G7 Kigarama.gdb")
 def get_gdb_path() -> str:
     return _active_gdb
 
