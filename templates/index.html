@@ -692,6 +692,23 @@ function showToast(msg, error=false) {
     if (e.target.id === id) document.getElementById(id).classList.remove('open');
   });
 });
+// Auto-load on page open
+window.addEventListener('load', () => {
+  fetch('/api/layers').then(r => r.json()).then(data => {
+    if (data.layers && data.layers.length) {
+      layers = data.layers.map((name, i) => ({
+        name, color: DEFAULT_COLORS[i % DEFAULT_COLORS.length],
+        visible: false, leafletLayer: null,
+        symField: null, symMap: null, geojsonCache: null
+      }));
+      renderSidebar();
+      if (data.rasters && data.rasters.length) {
+        data.rasters.forEach(r => addRasterEntry(r.name, r.path));
+        renderRasterList();
+      }
+    }
+  });
+});
 </script>
 </body>
 </html>
